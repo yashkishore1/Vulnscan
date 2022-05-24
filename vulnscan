@@ -1,0 +1,213 @@
+#!/bin/bash
+
+# Author: Yash Kishore
+# Created: 11th May 2022
+# Last Modified: 15th May 2022 
+# Description: A quick automation to find basic vulnerabilities in web applications (Within 60 Seconds)
+# Usage: bash yash or ./yash
+
+
+Red=$'\e[1;31m'
+Green=$'\e[1;32m'
+
+if [[ $UID -ne 0 ]]
+then 
+	echo "Please run with sudo or as root." >&2
+	exit 1
+else
+	echo "You are root" 
+	sleep .5
+	echo "Script can continue. . ."
+	sleep .5
+	echo ""
+fi
+
+echo "[!]legal disclaimer: Usage of this script without prior mutual consent is illegal. It is the end user's responsibility to obey all applicable local, state and federal laws. Developers assume no liability and are not responsible for any misuse or damage caused by this Script."
+sleep 2
+echo ""
+read -p "Please enter the target URL: " target
+echo ""
+
+
+if [[ $target == http* ]]
+then
+	echo "[i] Checking if the $target is up."
+	sleep 2
+elif [[ $target == +([0-9]).+([0-9]).+([0-9]).+([0-9]) ]]
+	then
+echo "[!] IP's are not supported"
+sleep 1 
+echo "Please Enter Complete URL"
+	echo "Example : https://www.example.com"
+	sleep 1
+	echo "Exiting. . ."
+	sleep 1
+	exit 1
+else
+	echo "Please Enter Complete URL"
+	echo "Example : https://www.example.com"
+	echo "Exiting. . ."
+	sleep 1
+	exit 1
+fi
+
+results_a=$(curl -Is -m 10 $target )
+if [[ $results_a == *200* ]] 
+then
+	echo "[i] $target is up"
+	sleep 2
+	echo "[i] Checking For Vulnerabilities"
+	echo "===================================="
+	sleep 2
+else
+	echo "[!] $target seems down"
+	sleep 1
+	echo "Exiting. . ." 
+	exit 1
+fi
+
+
+hsts=$(curl -s -D- $target | grep -i Strict)
+if [[ $hsts == strict* ]]
+then 
+	echo "$Green[1] HSTS is Implemented"
+	sleep 1
+else
+	echo "$Red[1] HSTS is not Implemented "
+	sleep 1
+fi
+
+domain="$(awk -F/ '{print $3}' <<<"$target")" 
+ciphers_scan=$(nmap -sV --script ssl-enum-ciphers -p 443 $domain)
+if [[ $ciphers_scan == *TLSv1.0:* ]] 
+then
+	echo "$Red[2] TLSv1.0 is Implemented"
+	sleep 1
+else
+	echo "$Green[2] TLSv1.0 is not Implemented"
+	sleep 1
+fi
+
+if [[ $ciphers_scan ==  *AES_128* ]]
+then
+		echo "$Red[3] Weak Cipher is present"
+	sleep 1
+else
+	echo "$Green[3] Weak Cipher is not present"
+	sleep 1
+fi
+
+if [[ $ciphers_scan ==  *SWEET32* ]]
+then
+		echo "$Red[4] Vulnerable to Sweet32"
+	sleep 1
+else
+	echo "$Green[4] Not Vulnerable to Sweet32"
+	sleep 1
+fi
+
+nmap --script http-methods -p 80,443 --script-args http-method.test-all $domain | grep -q "OPTIONS"
+if [[ $? -eq 0 ]]
+then
+	echo "$Red[5] OPTIONS method enabled"
+	sleep 1
+else 
+	echo "$Green[5] OPTIONS method not enabled"
+	sleep 1
+fi
+
+curl=$(curl -Is --no-progress-meter $target)
+echo $curl | grep "access-control-allow-origin:" | grep -q "*"
+if [[ $? -eq 0 ]]
+then
+	echo "$Red[6] Vulnerable to CORS"
+	sleep 1
+else 
+	echo "$Green[6] Not Vulnerable to CORS"
+	sleep 1
+fi
+
+echo $curl | grep -q "x-frame-options:"
+if [[ $? -eq 0 ]]
+then
+	echo "$Green[7] Not Vulnerable to Clickjacking"
+	sleep 1
+else 
+	echo "$Red[7] Vulnerable to Clickjacking"
+	sleep 1
+fi
+
+echo $curl | grep -q "x-xss-protection:"
+if [[ $? -eq 0 ]]
+then
+	echo "$Green[8] XSS-Protection header is defined"
+	sleep 1
+else 
+	echo "$Red[8] XSS-Protection header is not defined"
+	sleep 1
+fi
+
+echo $curl | grep -q "x-content-type-options:"
+if [[ $? -eq 0 ]]
+then
+	echo "$Green[9] X-Content-Type-Options header is set"
+	sleep 1
+else 
+	echo "$Red[9] X-Content-Type-Options header is not set"
+	sleep 1
+fi
+
+nmap --script http-methods -p 80,443 --script-args http-method.test-all $domain | grep -q "TRACE"
+if [[ $? -eq 0 ]]
+then
+	echo "$Red[10] Trace method enabled"
+	sleep 1
+else 
+	echo "$Green[10] Trace method not enabled"
+	sleep 1
+fi
+
+
+cookie=$(curl -Is --head --cookie-jar - $target ) 
+echo $cookie | grep HttpOnly > /dev/null
+if [[ $? -eq 0 ]]
+then
+	echo "$Green[11] HttpOnly flag set to true"
+	sleep 1
+else 
+	echo "$Red[11] HttpOnly flag set to false"
+	sleep 1
+fi
+
+
+echo $cookie | grep -q "SameSite=Strict\|SameSite=Lax" > /dev/null
+if [[ $? -eq 0 ]]
+then
+	echo "$Green[12] SameSite Attribute found"
+	sleep 1
+else 
+	echo "$Red[12] SameSite Attribute not found"
+	sleep 1
+fi
+
+echo $cookie| grep -i Secure > /dev/null
+if [[ $? -eq 0 ]]
+then
+	echo "$Green[13] Secure flag set to true"
+	sleep 1
+else 
+	echo "$Red[13] Secure flag set to false"
+	sleep 1
+fi
+
+echo $cookie| grep -i csrftoken > /dev/null
+if [[ $? -eq 0 ]]
+then
+	echo "$Green[14] CSRF Token found"
+	sleep 1
+else 
+	echo "$Red[14] CSRF Token not found"
+	sleep 1
+fi
+
+exit 0
