@@ -2,7 +2,7 @@
 
 # Author: Yash Kishore
 # Created: 11th May 2022
-# Last Modified: 15th May 2022 
+# Last Modified: 24th May 2022 
 # Description: A quick automation to find basic vulnerabilities in web applications (Within 60 Seconds)
 # Usage: bash vulnscan or ./vulnscan
 
